@@ -12,7 +12,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AQI Warehouse — Dashboard",
+  title: "AQI Warehouse",
   description: "Qualité de l'air — pipeline de data engineering (star schema, Neon, GitHub Actions)",
 };
 
