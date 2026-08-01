@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: var(--font-jetbrains), monospace;
+  --font-body: var(--font-jetbrains), monospace;
+  --font-mono: var(--font-jetbrains), monospace;
+}
+
+html {
+  background-color: #0a0b0f;
+  color-scheme: dark;
+}
+
+body {
+  color: #f8f8f9;
+}
+
+::selection {
+  background-color: #14b8a6;
+  color: #04120f;
+}
+
+.tremor-base {
+  --tremor-brand: #14b8a6;
+  --tremor-brand-emphasis: #2bc4bb;
+  --tremor-brand-inverted: #04120f;
+  --tremor-background-muted: #12141b;
+  --tremor-content-emphasis: #f8f8f9;
+  --tremor-content-strong: #e9eaed;
+  --tremor-content-default: #b7bbc4;
+  --tremor-content-subtle: #7c8294;
+  --tremor-border-default: #20232d;
+}
+
+.tremor-BarChart svg text,
+.tremor-LineChart svg text {
+  fill: #7c8294;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #2f333f;
+  border-radius: 999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: #565c6c;
+}
