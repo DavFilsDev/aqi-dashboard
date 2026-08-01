@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, QueryResultRow } from "pg";
 
 declare global {
   var __aqiPool: Pool | undefined;
@@ -32,4 +32,34 @@ export function getPool(): Pool {
     global.__aqiPool = createPool();
   }
   return global.__aqiPool;
+}
+
+const TRANSIENT_ERROR_CODES = new Set([
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EAI_AGAIN",
+]);
+
+function isTransient(err: unknown): boolean {
+  const code = (err as { code?: string; errors?: { code?: string }[] })?.code;
+  if (code && TRANSIENT_ERROR_CODES.has(code)) return true;
+  const nested = (err as { errors?: { code?: string }[] })?.errors;
+  return Boolean(nested?.some((e) => e.code && TRANSIENT_ERROR_CODES.has(e.code)));
+}
+
+export async function queryWithRetry<T extends QueryResultRow = any>(
+  pool: Pool,
+  text: string,
+  params?: unknown[]
+): Promise<{ rows: T[] }> {
+  try {
+    return await pool.query<T>(text, params as any[]);
+  } catch (err) {
+    if (!isTransient(err)) throw err;
+    console.warn("[db] transient error, retrying once:", (err as Error).message);
+    await new Promise((r) => setTimeout(r, 500));
+    return await pool.query<T>(text, params as any[]);
+  }
 }

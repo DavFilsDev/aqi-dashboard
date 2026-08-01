@@ -1,6 +1,5 @@
-import { getPool } from "@/lib/db";
+import { getPool, queryWithRetry } from "@/lib/db";
 import { City, CityStat, DayTypePoint, FactRow, Filters, HourPoint, TimePoint } from "@/types/aqi";
-
 
 interface WhereClause {
   sql: string;
@@ -87,7 +86,7 @@ const FROM_JOIN = `
 
 export async function getAllCities(): Promise<City[]> {
   const pool = getPool();
-  const { rows } = await pool.query<City>(
+  const { rows } = await queryWithRetry<City>(pool, 
     `SELECT city_id, city, country, latitude, longitude FROM dim_city ORDER BY country, city`
   );
   return rows;
@@ -95,7 +94,7 @@ export async function getAllCities(): Promise<City[]> {
 
 export async function getLastRefresh(): Promise<string | null> {
   const pool = getPool();
-  const { rows } = await pool.query<{ max: string }>(
+  const { rows } = await queryWithRetry<{ max: string }>(pool,
     `SELECT MAX(timestamp_utc) as max FROM dim_time`
   );
   return rows[0]?.max ?? null;
@@ -104,7 +103,7 @@ export async function getLastRefresh(): Promise<string | null> {
 export async function getOverviewKpis(filters: Filters) {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT
        AVG(fact_aqi.aqi) as global_avg_aqi,
        COUNT(*) as total_points,
@@ -121,7 +120,7 @@ export async function getDaysAboveThreshold(filters: Filters, threshold: number)
   const pool = getPool();
   const { sql, params } = buildWhere(filters, 1);
   const idx = params.length + 1;
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT COUNT(DISTINCT dim_time.date) as days
      ${FROM_JOIN}
      ${sql ? sql + " AND" : "WHERE"} fact_aqi.aqi >= $${idx}`,
@@ -133,7 +132,7 @@ export async function getDaysAboveThreshold(filters: Filters, threshold: number)
 export async function getCityStats(filters: Filters): Promise<CityStat[]> {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
-  const { rows } = await pool.query<CityStat>(
+  const { rows } = await queryWithRetry<CityStat>(pool, 
     `SELECT dim_city.city, dim_city.country,
             AVG(fact_aqi.aqi) as avg_aqi,
             AVG(fact_aqi.pm25) as avg_pm25,
@@ -157,7 +156,7 @@ export async function getTimeSeries(filters: Filters, granularity: "day" | "hour
   const { sql, params } = buildWhere(filters);
   const bucketExpr =
     granularity === "day" ? `dim_time.date` : `date_trunc('hour', dim_time.timestamp_utc)`;
-  const { rows } = await pool.query<TimePoint>(
+  const { rows } = await queryWithRetry<TimePoint>(pool, 
     `SELECT ${bucketExpr} as bucket, AVG(fact_aqi.aqi) as avg_aqi
      ${FROM_JOIN}
      ${sql}
@@ -171,7 +170,7 @@ export async function getTimeSeries(filters: Filters, granularity: "day" | "hour
 export async function getHourlyAverages(filters: Filters): Promise<HourPoint[]> {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
-  const { rows } = await pool.query<HourPoint>(
+  const { rows } = await queryWithRetry<HourPoint>(pool, 
     `SELECT dim_time.hour as hour, AVG(fact_aqi.aqi) as avg_aqi
      ${FROM_JOIN}
      ${sql}
@@ -185,7 +184,7 @@ export async function getHourlyAverages(filters: Filters): Promise<HourPoint[]> 
 export async function getWeekdayVsWeekend(filters: Filters): Promise<DayTypePoint[]> {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT dim_time.is_weekend as is_weekend, AVG(fact_aqi.aqi) as avg_aqi
      ${FROM_JOIN}
      ${sql}
@@ -203,13 +202,13 @@ export async function getCityDetail(cityId: number, filters: Filters) {
   const { sql, params } = buildWhere(filters, 2);
   const whereWithCity = sql ? `${sql} AND fact_aqi.city_id = $1` : `WHERE fact_aqi.city_id = $1`;
 
-  const cityRes = await pool.query<City>(
+  const cityRes = await queryWithRetry<City>(pool, 
     `SELECT city_id, city, country, latitude, longitude FROM dim_city WHERE city_id = $1`,
     [cityId]
   );
   const city = cityRes.rows[0] ?? null;
 
-  const series = await pool.query(
+  const series = await queryWithRetry(pool, 
     `SELECT dim_time.date as bucket, AVG(fact_aqi.aqi) as avg_aqi
      ${FROM_JOIN}
      ${whereWithCity}
@@ -217,7 +216,7 @@ export async function getCityDetail(cityId: number, filters: Filters) {
     [cityId, ...params]
   );
 
-  const pollutants = await pool.query(
+  const pollutants = await queryWithRetry(pool, 
     `SELECT AVG(fact_aqi.pm25) as pm25, AVG(fact_aqi.pm10) as pm10,
             AVG(fact_aqi.no2) as no2, AVG(fact_aqi.o3) as o3,
             AVG(fact_aqi.aqi) as avg_aqi, COUNT(*) as n
@@ -237,7 +236,7 @@ export async function getCorrelationMatrix(filters: Filters) {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
   const cols = ["aqi", "pm25", "pm10", "no2", "o3"];
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT
        corr(fact_aqi.aqi, fact_aqi.aqi) as aqi_aqi,
        corr(fact_aqi.aqi, fact_aqi.pm25) as aqi_pm25,
@@ -276,7 +275,7 @@ export async function getScatterData(filters: Filters, limit = 2000) {
   const pool = getPool();
   const { sql, params } = buildWhere(filters, 1);
   const idx = params.length + 1;
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT fact_aqi.pm25 as pm25, fact_aqi.aqi as aqi
      ${FROM_JOIN}
      ${sql ? sql + " AND" : "WHERE"} fact_aqi.pm25 IS NOT NULL AND fact_aqi.aqi IS NOT NULL
@@ -290,7 +289,7 @@ export async function getScatterData(filters: Filters, limit = 2000) {
 export async function getMapStats(filters: Filters) {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT dim_city.city, dim_city.country, dim_city.latitude, dim_city.longitude,
             AVG(fact_aqi.aqi) as avg_aqi, COUNT(*) as n
      ${FROM_JOIN}
@@ -329,14 +328,14 @@ export async function getExplorerRows(
   const pageSize = Math.min(500, Math.max(1, filters.pageSize ?? 50));
   const offset = (page - 1) * pageSize;
 
-  const countRes = await pool.query(`SELECT COUNT(*) as n ${FROM_JOIN} ${sql}`, params);
+  const countRes = await queryWithRetry(pool, `SELECT COUNT(*) as n ${FROM_JOIN} ${sql}`, params);
   const total = Number(countRes.rows[0]?.n ?? 0);
 
   const dataParams = [...params, pageSize, offset];
   const limitIdx = params.length + 1;
   const offsetIdx = params.length + 2;
 
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT fact_aqi.fact_id, dim_city.city, dim_city.country,
             dim_time.timestamp_utc, dim_time.date, dim_time.hour,
             dim_time.day_of_week, dim_time.is_weekend,
@@ -364,7 +363,7 @@ export async function getExplorerRowsForExport(filters: Filters, cap = 20000): P
   const sortCol = SORTABLE_COLUMNS[filters.sortBy ?? "timestamp_utc"] ?? "dim_time.timestamp_utc";
   const sortDir = filters.sortDir === "asc" ? "ASC" : "DESC";
   const idx = params.length + 1;
-  const { rows } = await pool.query(
+  const { rows } = await queryWithRetry(pool, 
     `SELECT dim_city.city, dim_city.country,
             dim_time.timestamp_utc, dim_time.date, dim_time.hour,
             dim_time.day_of_week, dim_time.is_weekend,
