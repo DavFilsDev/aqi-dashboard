@@ -34,8 +34,7 @@ body {
   --tremor-border-default: #20232d;
 }
 
-.tremor-BarChart svg text,
-.tremor-LineChart svg text {
+.recharts-cartesian-axis-tick text {
   fill: #7c8294;
 }
 

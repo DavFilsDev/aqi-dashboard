@@ -6,15 +6,17 @@ const config: Config = {
     "./components/**/*.{ts,tsx}",
     "./node_modules/@tremor/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: [
+    {
+      pattern:
+        /^(bg|border|text|fill|stroke|ring)-(teal|cyan|emerald|amber|rose|violet|sky|lime|orange|gray|slate)-(50|100|200|300|400|500|600|700|800|900|950)$/,
+      variants: ["hover", "dark", "dark:hover"],
+    },
+  ],
   darkMode: "class",
   theme: {
     extend: {
       colors: {
-        // Dark-mode-first neutral scale. 50 = darkest (page background),
-        // 950 = lightest (primary text). Kept the same key names as the
-        // original light scale so every existing `bg-ink-*`/`text-ink-*`
-        // class in the app repaints automatically — no per-component
-        // find/replace needed for the neutral palette.
         ink: {
           50: "#0a0b0f",
           100: "#12141b",
@@ -28,8 +30,6 @@ const config: Config = {
           900: "#e9eaed",
           950: "#f8f8f9",
         },
-        // Primary accent — the one non black/white brand color, used for
-        // links, active nav state, buttons, focus rings and chat accents.
         primary: {
           50: "#eafdfb",
           100: "#c8f8f2",
@@ -50,9 +50,6 @@ const config: Config = {
           4: "#d1793d",
           5: "#b3432b",
         },
-        // Extra hues used ONLY to give charts variety from one graph to the
-        // next. Never used for AQI-severity meaning — that stays in
-        // lib/aqi-scale.ts.
         chart: {
           teal: "#2bc4bb",
           violet: "#a78bfa",

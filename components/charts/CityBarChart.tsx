@@ -27,6 +27,10 @@ export default function CityBarChart({ data }: { data: CityStat[] }) {
         showLegend={false}
         className="h-80"
         valueFormatter={(v) => (typeof v === "number" ? v.toFixed(2) : "0.00")}
+        showXAxis={true}
+        showYAxis={true}
+        xAxisLabel="Villes"
+        yAxisLabel="AQI"
       />
     </Card>
   );
