@@ -12,6 +12,7 @@ const NAV = [
   { href: "/map", label: "Map", icon: "◎" },
   { href: "/explorer", label: "Data Explorer", icon: "▤" },
   { href: "/ask", label: "Ask AI", icon: "✦" },
+  { href: "/architecture", label: "Architecture", icon: "⇄" },
   { href: "/about", label: "About", icon: "ⓘ" },
 ];
 

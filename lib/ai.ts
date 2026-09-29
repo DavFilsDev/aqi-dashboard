@@ -70,6 +70,11 @@ LIMIT 24;
 const PRIMARY_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const FALLBACK_MODEL = "openai/gpt-oss-20b";
 
+/** Model ids this deployment will try, in order. Safe to expose: not a secret. */
+export function getModelIds(): string[] {
+  return [PRIMARY_MODEL, FALLBACK_MODEL];
+}
+
 export class SqlValidationError extends Error {}
 export class ConfigurationError extends Error {}
 
@@ -422,6 +427,16 @@ export async function runValidatedQuery(sql: string): Promise<Record<string, unk
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 8;
+/**
+ * Best-effort limiter, NOT a security boundary.
+ *
+ * On Vercel each serverless instance gets its own memory, so this Map only
+ * ever sees the requests that landed on one warm instance — the effective
+ * global limit is the provider's, not this one. It exists to stop a single
+ * user hammering a warm function during a demo. The limits that actually hold
+ * are the read-only Postgres role, the SQL validation, and the Groq quota
+ * (429s are propagated with a Retry-After, and the SDK retries once).
+ */
 const buckets = new Map<string, number[]>();
 
 export function checkRateLimit(key: string): { ok: boolean; retryAfterMs: number } {

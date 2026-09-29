@@ -10,6 +10,7 @@ const TITLES: Record<string, string> = {
   "/map": "Map",
   "/explorer": "Data Explorer",
   "/ask": "Ask AI",
+  "/architecture": "Architecture",
   "/about": "About",
 };
 
