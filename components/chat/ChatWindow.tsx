@@ -245,12 +245,21 @@ export default function ChatWindow() {
     setMessages(next);
     saveConversation(next);
     setLoading(true);
-    setStreaming({ text: "", status: "Préparation…", sql: null, rows: null, rowCount: 0, repaired: false, degraded: false });
+    const initial: Streaming = {
+      text: "",
+      status: "Préparation…",
+      sql: null,
+      rows: null,
+      rowCount: 0,
+      repaired: false,
+      degraded: false,
+    };
+    setStreaming(initial);
 
     const controller = new AbortController();
     abortRef.current = controller;
     let accumulated = "";
-    let state: Streaming | null = null;
+    let state: Streaming = initial;
     let failure: string | null = null;
 
     try {
@@ -299,18 +308,18 @@ export default function ChatWindow() {
           if (event.type === "error") {
             failure = event.error;
           } else if (event.type === "status") {
-            state = { ...(state ?? streaming!), status: event.label };
+            state = { ...state, status: event.label };
           } else if (event.type === "sql") {
-            state = { ...(state ?? streaming!), sql: event.sql };
+            state = { ...state, sql: event.sql };
           } else if (event.type === "rows") {
-            state = { ...(state ?? streaming!), rows: event.rows, rowCount: event.rowCount };
+            state = { ...state, rows: event.rows, rowCount: event.rowCount };
           } else if (event.type === "delta") {
             accumulated += event.text;
-            state = { ...(state ?? streaming!), text: accumulated };
+            state = { ...state, text: accumulated };
           } else if (event.type === "done") {
-            state = { ...(state ?? streaming!), degraded: event.degraded, repaired: event.repaired };
+            state = { ...state, degraded: event.degraded, repaired: event.repaired };
           }
-          if (state) setStreaming(state);
+          setStreaming(state);
         }
       }
 
@@ -318,7 +327,7 @@ export default function ChatWindow() {
         throw new Error(failure);
       }
 
-      const final = state ?? { ...streaming!, text: accumulated };
+      const final = state;
       const answer: ChatMessage = {
         role: "assistant",
         content: final.text.trim() || "(Aucune réponse.)",
@@ -445,7 +454,7 @@ export default function ChatWindow() {
                   rowCount={streaming.rowCount}
                   degraded={streaming.degraded}
                   repaired={streaming.repaired}
-                  pending={streaming.text.length === 0}
+                  pending={!streaming.text}
                   status={streaming.status}
                   onStop={stop}
                 />

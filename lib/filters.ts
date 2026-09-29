@@ -8,9 +8,8 @@ export function parseFilters(
     return Array.isArray(v) ? v[0] : v;
   };
 
-  const cities = get("city")
-    ? get("city")!.split(",").filter(Boolean)
-    : DEFAULT_FILTERS.cities;
+  const cityParam = get("city");
+  const cities = cityParam ? cityParam.split(",").filter(Boolean) : DEFAULT_FILTERS.cities;
 
   const dayTypeRaw = get("dayType");
   const dayType: Filters["dayType"] =

@@ -46,8 +46,9 @@ export default function FilterBar({
   const citiesByCountry = useMemo(() => {
     const map = new Map<string, City[]>();
     for (const c of cities) {
-      if (!map.has(c.country)) map.set(c.country, []);
-      map.get(c.country)!.push(c);
+      const bucket = map.get(c.country);
+      if (bucket) bucket.push(c);
+      else map.set(c.country, [c]);
     }
     return map;
   }, [cities]);
