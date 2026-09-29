@@ -104,15 +104,23 @@ type CompletionParams = {
 
 const GROQ_TIMEOUT_MS = Number(process.env.GROQ_TIMEOUT_MS ?? 8_000);
 
-async function createCompletion(params: CompletionParams) {
+function requestOptions() {
+  return { signal: AbortSignal.timeout(GROQ_TIMEOUT_MS), maxRetries: 1 };
+}
+
+/**
+ * Runs `fn` against the configured model and, if that model reports itself
+ * unavailable, once more against a smaller fallback. Any other failure is
+ * rethrown immediately so we never burn a second call on a 401 or a 429.
+ */
+async function withModelFallback<T>(fn: (model: string) => Promise<T>): Promise<T> {
   const models = [PRIMARY_MODEL, FALLBACK_MODEL];
+  let lastError: unknown;
   for (let i = 0; i < models.length; i++) {
     try {
-      return await getGroq().chat.completions.create(
-        { ...params, model: models[i] },
-        { signal: AbortSignal.timeout(GROQ_TIMEOUT_MS), maxRetries: 1 }
-      );
+      return await fn(models[i]);
     } catch (err) {
+      lastError = err;
       if (i < models.length - 1 && isModelUnavailable(err)) {
         console.warn(`[ai] model "${models[i]}" unavailable, retrying with "${models[i + 1]}"`);
         continue;
@@ -120,7 +128,7 @@ async function createCompletion(params: CompletionParams) {
       throw err;
     }
   }
-  throw new ConfigurationError("No usable completion model is configured.");
+  throw lastError;
 }
 
 export interface AskError {
@@ -270,16 +278,64 @@ export async function generateSql(
   question: string,
   history: { role: string; content: string }[]
 ): Promise<string> {
-  const completion = await createCompletion({
-    temperature: 0.1,
-    max_tokens: 500,
-    messages: [
-      { role: "system", content: SCHEMA_DOC },
-      ...normaliseHistory(history),
-      { role: "user", content: question },
-    ],
-  });
+  const messages: CompletionParams["messages"] = [
+    { role: "system", content: SCHEMA_DOC },
+    ...normaliseHistory(history),
+    { role: "user", content: question },
+  ];
+  const completion = await withModelFallback((model) =>
+    getGroq().chat.completions.create(
+      { model, temperature: 0.1, max_tokens: 500, messages },
+      requestOptions()
+    )
+  );
   return completion.choices[0]?.message?.content ?? "";
+}
+
+function summaryMessages(question: string, rows: Record<string, unknown>[]): CompletionParams["messages"] {
+  const sample = JSON.stringify(rows.slice(0, 30));
+  return [
+    {
+      role: "system",
+      content:
+        "You explain air-quality query results in 2-4 plain sentences, in the same language as the question. Be concrete: name cities, numbers, trends. Do not mention SQL.",
+    },
+    {
+      role: "user",
+      content: `Question: ${question}\nResult rows (JSON, may be truncated): ${sample}\n\nWrite a short answer.`,
+    },
+  ];
+}
+
+export async function summarizeResult(
+  question: string,
+  rows: Record<string, unknown>[]
+): Promise<string> {
+  const completion = await withModelFallback((model) =>
+    getGroq().chat.completions.create(
+      { model, temperature: 0.2, max_tokens: 300, messages: summaryMessages(question, rows) },
+      requestOptions()
+    )
+  );
+  return completion.choices[0]?.message?.content ?? "";
+}
+
+/** Same job as summarizeResult, but the answer is delivered token by token. */
+export async function streamSummary(
+  question: string,
+  rows: Record<string, unknown>[],
+  onDelta: (text: string) => void
+): Promise<void> {
+  const stream = await withModelFallback((model) =>
+    getGroq().chat.completions.create(
+      { model, temperature: 0.2, max_tokens: 300, stream: true, messages: summaryMessages(question, rows) },
+      requestOptions()
+    )
+  );
+  for await (const chunk of stream) {
+    const text = chunk.choices[0]?.delta?.content;
+    if (text) onDelta(text);
+  }
 }
 
 export interface AskResult {
@@ -328,13 +384,15 @@ const REPAIR_PROMPT = (sql: string, message: string) =>
 export async function askWarehouse(
   question: string,
   history: { role: string; content: string }[] = [],
-  maxAttempts = 2
+  maxAttempts = 2,
+  onSql?: (sql: string) => void
 ): Promise<AskResult> {
   const repair: Turn[] = [];
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const sql = validateSelectOnly(await generateSql(question, [...history, ...repair]));
+    onSql?.(sql);
     try {
       const rows = await runValidatedQuery(sql);
       return { sql, rows, attempts: attempt };
@@ -349,29 +407,6 @@ export async function askWarehouse(
   }
 
   throw lastError;
-}
-
-export async function summarizeResult(
-  question: string,
-  rows: Record<string, unknown>[]
-): Promise<string> {
-  const sample = JSON.stringify(rows.slice(0, 30));
-  const completion = await createCompletion({
-    temperature: 0.2,
-    max_tokens: 300,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You explain air-quality query results in 2-4 plain sentences, in the same language as the question. Be concrete: name cities, numbers, trends. Do not mention SQL.",
-      },
-      {
-        role: "user",
-        content: `Question: ${question}\nResult rows (JSON, may be truncated): ${sample}\n\nWrite a short answer.`,
-      },
-    ],
-  });
-  return completion.choices[0]?.message?.content ?? "";
 }
 
 export async function runValidatedQuery(sql: string): Promise<Record<string, unknown>[]> {

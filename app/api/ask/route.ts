@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   askWarehouse,
   checkRateLimit,
-  summarizeResult,
+  streamSummary,
   toAskError,
 } from "@/lib/ai";
 import { normaliseRows } from "@/lib/rows";
+import type { AskEvent } from "@/types/aqi";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -20,12 +21,10 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   const rate = checkRateLimit(ip);
   if (!rate.ok) {
+    const seconds = Math.ceil(rate.retryAfterMs / 1000);
     return NextResponse.json(
-      {
-        code: "rate_limited",
-        error: `Trop de requêtes. Réessayez dans ${Math.ceil(rate.retryAfterMs / 1000)}s.`,
-      },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(rate.retryAfterMs / 1000)) } }
+      { code: "rate_limited", error: `Trop de requêtes. Réessayez dans ${seconds}s.` },
+      { status: 429, headers: { "Retry-After": String(seconds) } }
     );
   }
 
@@ -53,30 +52,58 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  try {
-    const { sql, rows, attempts } = await askWarehouse(question, body.history ?? []);
+  const history = body.history ?? [];
+  const encoder = new TextEncoder();
 
-    let summary: string;
-    let degraded = false;
-    try {
-      summary = await summarizeResult(question, normaliseRows(rows, 30));
-    } catch (err) {
-      console.error("[ask] summary failed, degrading to raw rows:", err);
-      summary = FALLBACK_SUMMARY;
-      degraded = true;
-    }
+  // Everything past this point is a stream: the HTTP status is already 200,
+  // so failures travel as an `error` event instead.
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: AskEvent) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
 
-    return NextResponse.json({
-      sql,
-      rows: normaliseRows(rows, CLIENT_ROW_LIMIT),
-      rowCount: rows.length,
-      summary,
-      degraded,
-      repaired: attempts > 1,
-    });
-  } catch (err) {
-    const { status, code, error } = toAskError(err);
-    if (status >= 500) console.error(`[ask] ${code}:`, err);
-    return NextResponse.json({ code, error }, { status });
-  }
+      try {
+        send({ type: "status", label: "Traduction de la question en SQL…" });
+
+        const { sql, rows, attempts } = await askWarehouse(question, history, 2, (validated) =>
+          send({ type: "sql", sql: validated })
+        );
+
+        send({
+          type: "rows",
+          rows: normaliseRows(rows, CLIENT_ROW_LIMIT),
+          rowCount: rows.length,
+        });
+        send({ type: "status", label: "Rédaction de la réponse…" });
+
+        let degraded = false;
+        try {
+          await streamSummary(question, normaliseRows(rows, 30), (text) =>
+            send({ type: "delta", text })
+          );
+        } catch (err) {
+          console.error("[ask] summary failed, degrading to raw rows:", err);
+          send({ type: "delta", text: FALLBACK_SUMMARY });
+          degraded = true;
+        }
+
+        send({ type: "done", degraded, repaired: attempts > 1 });
+      } catch (err) {
+        const { code, error } = toAskError(err);
+        if (code !== "sql_rejected") console.error(`[ask] ${code}:`, err);
+        send({ type: "error", code, error });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
