@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { City, DEFAULT_FILTERS } from "@/types/aqi";
+import { City, Filters } from "@/types/aqi";
 import { DATE_PRESETS, parseFilters, filtersToSearchParams } from "@/lib/filters";
 
 export interface FilterBarConfig {
@@ -46,8 +46,9 @@ export default function FilterBar({
   const citiesByCountry = useMemo(() => {
     const map = new Map<string, City[]>();
     for (const c of cities) {
-      if (!map.has(c.country)) map.set(c.country, []);
-      map.get(c.country)!.push(c);
+      const bucket = map.get(c.country);
+      if (bucket) bucket.push(c);
+      else map.set(c.country, [c]);
     }
     return map;
   }, [cities]);
@@ -266,9 +267,10 @@ export default function FilterBar({
                   type="number"
                   min={0}
                   value={filters[key] ?? ""}
-                  onChange={(e) =>
-                    push({ [key]: e.target.value === "" ? null : Number(e.target.value) } as any)
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? null : Number(e.target.value);
+                    push({ [key]: value } as Partial<Filters>);
+                  }}
                   className="w-24 text-xs border border-ink-200 rounded-md px-2 py-1"
                   placeholder="—"
                 />

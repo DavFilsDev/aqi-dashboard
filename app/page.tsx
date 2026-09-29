@@ -6,6 +6,7 @@ import TimeSeriesChart from "@/components/charts/TimeSeriesChart";
 import { parseFilters } from "@/lib/filters";
 import { getAllCities, getCityStats, getDaysAboveThreshold, getOverviewKpis, getTimeSeries } from "@/lib/queries";
 import { aqiColor } from "@/lib/aqi-scale";
+import { formatUtcDate, formatUtcDay } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,9 @@ async function OverviewContent({ searchParams }: { searchParams: Record<string, 
   const totalPoints = Number(kpis?.total_points ?? 0);
   const rangeLabel =
     kpis?.min_date && kpis?.max_date
-      ? `${new Date(kpis.min_date).toLocaleDateString("fr-FR")} → ${new Date(kpis.max_date).toLocaleDateString("fr-FR")}`
+      ? `${formatUtcDate(kpis.min_date)} → ${formatUtcDate(kpis.max_date)}`
       : "—";
+  const labelledSeries = series.map((p) => ({ ...p, label: formatUtcDay(p.bucket) }));
 
   return (
     <div className="space-y-6">
@@ -57,7 +59,7 @@ async function OverviewContent({ searchParams }: { searchParams: Record<string, 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CityBarChart data={cityStats} />
-        <TimeSeriesChart data={series} />
+        <TimeSeriesChart data={labelledSeries} />
       </div>
     </div>
   );

@@ -14,7 +14,7 @@ export default function TimeSeriesChart({
 }) {
   if (data.length === 0) return <EmptyState />;
   const chartData = data.map((d) => ({
-    date: new Date(d.bucket).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }),
+    date: d.label ?? d.bucket,
     "AQI moyen": Number(d.avg_aqi?.toFixed?.(2) ?? d.avg_aqi),
   }));
   return (

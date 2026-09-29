@@ -71,6 +71,7 @@ export interface CityStat {
 export interface TimePoint {
   bucket: string;
   avg_aqi: number;
+  label?: string;
 }
 
 export interface HourPoint {
@@ -83,15 +84,25 @@ export interface DayTypePoint {
   avg_aqi: number;
 }
 
-export interface AskResponse {
-  sql: string;
-  rows: Record<string, unknown>[];
-  summary: string;
+export interface AskErrorResponse {
+  code: string;
+  error: string;
 }
+
+export type AskEvent =
+  | { type: "status"; label: string }
+  | { type: "sql"; sql: string }
+  | { type: "rows"; rows: Record<string, unknown>[]; rowCount: number }
+  | { type: "delta"; text: string }
+  | { type: "done"; degraded: boolean; repaired: boolean }
+  | { type: "error"; code: string; error: string };
 
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sql?: string;
   rows?: Record<string, unknown>[];
+  rowCount?: number;
+  degraded?: boolean;
+  repaired?: boolean;
 }
