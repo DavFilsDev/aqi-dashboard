@@ -87,6 +87,7 @@ export interface AskResponse {
   sql: string;
   rows: Record<string, unknown>[];
   summary: string;
+  degraded?: boolean;
 }
 
 export interface ChatMessage {

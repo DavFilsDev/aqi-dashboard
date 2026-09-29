@@ -5,16 +5,25 @@ import {
   runValidatedQuery,
   summarizeResult,
   validateSelectOnly,
-  SqlValidationError,
+  toAskError,
 } from "@/lib/ai";
+
+export const runtime = "nodejs";
+export const maxDuration = 30;
+
+const FALLBACK_SUMMARY =
+  "Le résumé automatique n'a pas pu être généré, voici donc les résultats bruts de la requête.";
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   const rate = checkRateLimit(ip);
   if (!rate.ok) {
     return NextResponse.json(
-      { error: `Trop de requêtes. Réessayez dans ${Math.ceil(rate.retryAfterMs / 1000)}s.` },
-      { status: 429 }
+      {
+        code: "rate_limited",
+        error: `Trop de requêtes. Réessayez dans ${Math.ceil(rate.retryAfterMs / 1000)}s.`,
+      },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rate.retryAfterMs / 1000)) } }
     );
   }
 
@@ -22,35 +31,45 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
+    return NextResponse.json(
+      { code: "bad_request", error: "Corps de requête invalide." },
+      { status: 400 }
+    );
   }
 
   const question = body.question?.trim();
   if (!question) {
-    return NextResponse.json({ error: "La question est vide." }, { status: 400 });
+    return NextResponse.json(
+      { code: "bad_request", error: "La question est vide." },
+      { status: 400 }
+    );
   }
   if (question.length > 500) {
-    return NextResponse.json({ error: "Question trop longue (500 caractères max)." }, { status: 400 });
+    return NextResponse.json(
+      { code: "bad_request", error: "Question trop longue (500 caractères max)." },
+      { status: 400 }
+    );
   }
 
   try {
     const rawSql = await generateSql(question, body.history ?? []);
     const sql = validateSelectOnly(rawSql);
     const rows = await runValidatedQuery(sql);
-    const summary = await summarizeResult(question, rows);
 
-    return NextResponse.json({ sql, rows: rows.slice(0, 500), summary });
-  } catch (err) {
-    if (err instanceof SqlValidationError) {
-      return NextResponse.json(
-        { error: `La requête générée n'a pas passé la validation de sécurité : ${err.message}` },
-        { status: 422 }
-      );
+    let summary: string;
+    let degraded = false;
+    try {
+      summary = await summarizeResult(question, rows);
+    } catch (err) {
+      console.error("[ask] summary failed, degrading to raw rows:", err);
+      summary = FALLBACK_SUMMARY;
+      degraded = true;
     }
-    console.error("Ask AI error:", err);
-    return NextResponse.json(
-      { error: "Impossible de générer une réponse pour cette question." },
-      { status: 500 }
-    );
+
+    return NextResponse.json({ sql, rows, summary, degraded });
+  } catch (err) {
+    const { status, code, error } = toAskError(err);
+    if (status >= 500) console.error(`[ask] ${code}:`, err);
+    return NextResponse.json({ code, error }, { status });
   }
 }

@@ -1,5 +1,12 @@
 import { Pool, QueryResultRow } from "pg";
 
+export class DatabaseError extends Error {
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = "DatabaseError";
+  }
+}
+
 declare global {
   var __aqiPool: Pool | undefined;
 }

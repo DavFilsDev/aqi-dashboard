@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import { getPool } from "@/lib/db";
+import { getPool, DatabaseError } from "@/lib/db";
 
 const SCHEMA_DOC = `
 You write PostgreSQL SELECT queries against this exact star schema:
@@ -77,11 +77,16 @@ type CompletionParams = {
   max_tokens?: number;
 };
 
+const GROQ_TIMEOUT_MS = Number(process.env.GROQ_TIMEOUT_MS ?? 8_000);
+
 async function createCompletion(params: CompletionParams) {
   const models = [PRIMARY_MODEL, FALLBACK_MODEL];
   for (let i = 0; i < models.length; i++) {
     try {
-      return await getGroq().chat.completions.create({ ...params, model: models[i] });
+      return await getGroq().chat.completions.create(
+        { ...params, model: models[i] },
+        { signal: AbortSignal.timeout(GROQ_TIMEOUT_MS), maxRetries: 1 }
+      );
     } catch (err) {
       if (i < models.length - 1 && isModelUnavailable(err)) {
         console.warn(`[ai] model "${models[i]}" unavailable, retrying with "${models[i + 1]}"`);
@@ -91,6 +96,75 @@ async function createCompletion(params: CompletionParams) {
     }
   }
   throw new ConfigurationError("No usable completion model is configured.");
+}
+
+export interface AskError {
+  status: number;
+  code: string;
+  error: string;
+}
+
+/**
+ * Maps any thrown value onto a status + stable machine code + French message.
+ * Never leaks the DSN, the API key or a stack trace to the client.
+ */
+export function toAskError(err: unknown): AskError {
+  if (err instanceof SqlValidationError) {
+    return {
+      status: 422,
+      code: "sql_rejected",
+      error: `La requête générée n'a pas passé la validation de sécurité : ${err.message}`,
+    };
+  }
+  if (err instanceof ConfigurationError) {
+    return {
+      status: 503,
+      code: "ai_misconfigured",
+      error: "Le service « Ask AI » n'est pas configuré sur ce déploiement.",
+    };
+  }
+
+  const e = (err ?? {}) as { status?: number; code?: string; name?: string; message?: string };
+  if (e.status === 404 || e.code === "model_not_found") {
+    return {
+      status: 503,
+      code: "ai_model_unavailable",
+      error: "Le modèle IA configuré n'est plus disponible chez le fournisseur.",
+    };
+  }
+  if (e.status === 401 || e.status === 403) {
+    return {
+      status: 503,
+      code: "ai_unauthorized",
+      error: "Clé API refusée par le fournisseur IA.",
+    };
+  }
+  if (e.status === 429) {
+    return {
+      status: 429,
+      code: "ai_rate_limited",
+      error: "Le fournisseur IA est saturé. Réessayez dans quelques secondes.",
+    };
+  }
+  if (e.name === "TimeoutError" || e.name === "AbortError" || e.code === "ETIMEDOUT") {
+    return {
+      status: 504,
+      code: "ai_timeout",
+      error: "Le fournisseur IA n'a pas répondu à temps. Réessayez.",
+    };
+  }
+  if (err instanceof DatabaseError) {
+    return {
+      status: 502,
+      code: "warehouse_unavailable",
+      error: "L'entrepôt de données n'a pas pu être interrogé.",
+    };
+  }
+  return {
+    status: 500,
+    code: "internal",
+    error: "Impossible de générer une réponse pour cette question.",
+  };
 }
 
 export function validateSelectOnly(rawSql: string): string {
@@ -159,8 +233,15 @@ export async function summarizeResult(
 
 export async function runValidatedQuery(sql: string): Promise<Record<string, unknown>[]> {
   const pool = getPool();
-  const { rows } = await pool.query(sql);
-  return rows.slice(0, 500);
+  try {
+    const { rows } = await pool.query(sql);
+    return rows.slice(0, 500);
+  } catch (err) {
+    throw new DatabaseError(
+      err instanceof Error ? err.message : "warehouse query failed",
+      err
+    );
+  }
 }
 
 const WINDOW_MS = 60_000;
