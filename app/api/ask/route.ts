@@ -59,8 +59,24 @@ export async function POST(req: NextRequest) {
   // so failures travel as an `error` event instead.
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let closed = false;
       const send = (event: AskEvent) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          // The browser hung up (Stop button, navigation, lost connection).
+          closed = true;
+        }
+      };
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // Already closed or errored.
+        }
       };
 
       try {
@@ -94,7 +110,7 @@ export async function POST(req: NextRequest) {
         if (code !== "sql_rejected") console.error(`[ask] ${code}:`, err);
         send({ type: "error", code, error });
       } finally {
-        controller.close();
+        close();
       }
     },
   });
