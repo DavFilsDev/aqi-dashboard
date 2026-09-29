@@ -4,6 +4,7 @@ import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import { getLastRefresh } from "@/lib/queries";
+import { formatUtcDateTime } from "@/lib/format";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -22,6 +23,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const lastRefresh = await getLastRefresh().catch(() => null);
+  // Formatted here, on the server: Topbar must not build a Date during render.
+  const lastRefreshLabel = formatUtcDateTime(lastRefresh);
 
   return (
     <html lang="fr" className={jetbrainsMono.variable}>
@@ -29,7 +32,7 @@ export default async function RootLayout({
         <div className="flex min-h-screen">
           <Sidebar />
           <div className="flex-1 flex flex-col min-w-0">
-            <Topbar lastRefresh={lastRefresh} />
+            <Topbar lastRefreshLabel={lastRefreshLabel} />
             <main className="flex-1 px-4 md:px-8 py-6 max-w-[1400px] w-full mx-auto">
               {children}
             </main>

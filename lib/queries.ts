@@ -1,4 +1,5 @@
 import { getPool, queryWithRetry } from "@/lib/db";
+import { toIsoString } from "@/lib/format";
 import { City, CityStat, DayTypePoint, FactRow, Filters, HourPoint, TimePoint } from "@/types/aqi";
 
 interface WhereClause {
@@ -94,10 +95,10 @@ export async function getAllCities(): Promise<City[]> {
 
 export async function getLastRefresh(): Promise<string | null> {
   const pool = getPool();
-  const { rows } = await queryWithRetry<{ max: string }>(pool,
+  const { rows } = await queryWithRetry<{ max: Date | string | null }>(pool,
     `SELECT MAX(timestamp_utc) as max FROM dim_time`
   );
-  return rows[0]?.max ?? null;
+  return toIsoString(rows[0]?.max);
 }
 
 export async function getOverviewKpis(filters: Filters) {

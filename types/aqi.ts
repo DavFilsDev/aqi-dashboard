@@ -71,6 +71,8 @@ export interface CityStat {
 export interface TimePoint {
   bucket: string;
   avg_aqi: number;
+  /** Pre-formatted UTC label, computed on the server to avoid a hydration mismatch. */
+  label?: string;
 }
 
 export interface HourPoint {

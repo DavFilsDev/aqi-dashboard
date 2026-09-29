@@ -5,6 +5,7 @@ import HourBarChart from "@/components/charts/HourBarChart";
 import WeekdayCompareChart from "@/components/charts/WeekdayCompareChart";
 import { parseFilters } from "@/lib/filters";
 import { getAllCities, getHourlyAverages, getTimeSeries, getWeekdayVsWeekend } from "@/lib/queries";
+import { formatUtcDay } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,11 @@ async function TrendsContent({ searchParams }: { searchParams: Record<string, st
         cities={cities}
         config={{ city: true, date: true, aqi: true, pollutants: true, dayType: true, hour: true }}
       />
-      <TimeSeriesChart data={series} title="AQI dans le temps" subtitle="Selon les filtres actifs" />
+      <TimeSeriesChart
+        data={series.map((p) => ({ ...p, label: formatUtcDay(p.bucket) }))}
+        title="AQI dans le temps"
+        subtitle="Selon les filtres actifs"
+      />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <HourBarChart data={hourly} />
         <WeekdayCompareChart data={dayType} />

@@ -4,6 +4,7 @@ import FilterBar from "@/components/filters/FilterBar";
 import { parseFilters, filtersToSearchParams } from "@/lib/filters";
 import { getAllCities, getExplorerRows } from "@/lib/queries";
 import { aqiColor } from "@/lib/aqi-scale";
+import { formatUtcDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,7 @@ async function ExplorerContent({ searchParams }: { searchParams: Record<string, 
             {rows.map((r) => (
               <tr key={r.fact_id} className="border-b border-ink-100 last:border-0 hover:bg-ink-50">
                 <td className="px-3 py-2 font-mono text-xs text-ink-600">
-                  {new Date(r.timestamp_utc).toLocaleString("fr-FR")}
+                  {formatUtcDateTime(r.timestamp_utc)}
                 </td>
                 <td className="px-3 py-2">{r.city}</td>
                 <td className="px-3 py-2">
