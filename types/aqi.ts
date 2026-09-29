@@ -90,6 +90,7 @@ export interface AskResponse {
   rows: Record<string, unknown>[];
   summary: string;
   degraded?: boolean;
+  repaired?: boolean;
 }
 
 export interface ChatMessage {

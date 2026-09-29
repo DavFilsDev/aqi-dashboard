@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  askWarehouse,
   checkRateLimit,
-  generateSql,
-  runValidatedQuery,
   summarizeResult,
-  validateSelectOnly,
   toAskError,
 } from "@/lib/ai";
 
@@ -52,9 +50,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const rawSql = await generateSql(question, body.history ?? []);
-    const sql = validateSelectOnly(rawSql);
-    const rows = await runValidatedQuery(sql);
+    const { sql, rows, attempts } = await askWarehouse(question, body.history ?? []);
 
     let summary: string;
     let degraded = false;
@@ -66,7 +62,7 @@ export async function POST(req: NextRequest) {
       degraded = true;
     }
 
-    return NextResponse.json({ sql, rows, summary, degraded });
+    return NextResponse.json({ sql, rows, summary, degraded, repaired: attempts > 1 });
   } catch (err) {
     const { status, code, error } = toAskError(err);
     if (status >= 500) console.error(`[ask] ${code}:`, err);

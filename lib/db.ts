@@ -1,9 +1,12 @@
 import { Pool, QueryResultRow } from "pg";
 
 export class DatabaseError extends Error {
-  constructor(message: string, readonly cause?: unknown) {
+  readonly code?: string;
+
+  constructor(message: string, code?: string, readonly cause?: unknown) {
     super(message);
     this.name = "DatabaseError";
+    this.code = code;
   }
 }
 
