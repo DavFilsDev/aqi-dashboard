@@ -27,6 +27,10 @@ function createPool(): Pool {
     max: 5,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
+    // An LLM-authored query can scan the whole fact table; cap it server-side
+    // rather than relying on a LIMIT the model may have forgotten.
+    statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS ?? 8_000),
+    query_timeout: Number(process.env.DB_QUERY_TIMEOUT_MS ?? 10_000),
     keepAlive: true,
   });
 

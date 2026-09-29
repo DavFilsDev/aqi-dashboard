@@ -5,12 +5,16 @@ import {
   summarizeResult,
   toAskError,
 } from "@/lib/ai";
+import { normaliseRows } from "@/lib/rows";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const FALLBACK_SUMMARY =
   "Le résumé automatique n'a pas pu être généré, voici donc les résultats bruts de la requête.";
+
+/** The summariser only ever reads the first 30 rows; the rest is display only. */
+const CLIENT_ROW_LIMIT = 200;
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
@@ -55,14 +59,21 @@ export async function POST(req: NextRequest) {
     let summary: string;
     let degraded = false;
     try {
-      summary = await summarizeResult(question, rows);
+      summary = await summarizeResult(question, normaliseRows(rows, 30));
     } catch (err) {
       console.error("[ask] summary failed, degrading to raw rows:", err);
       summary = FALLBACK_SUMMARY;
       degraded = true;
     }
 
-    return NextResponse.json({ sql, rows, summary, degraded, repaired: attempts > 1 });
+    return NextResponse.json({
+      sql,
+      rows: normaliseRows(rows, CLIENT_ROW_LIMIT),
+      rowCount: rows.length,
+      summary,
+      degraded,
+      repaired: attempts > 1,
+    });
   } catch (err) {
     const { status, code, error } = toAskError(err);
     if (status >= 500) console.error(`[ask] ${code}:`, err);

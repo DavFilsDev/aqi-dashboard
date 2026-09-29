@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import { getPool, DatabaseError } from "@/lib/db";
+import { getPool, queryWithRetry, DatabaseError } from "@/lib/db";
 
 const SCHEMA_DOC = `
 You write PostgreSQL SELECT queries against this exact star schema:
@@ -377,7 +377,7 @@ export async function summarizeResult(
 export async function runValidatedQuery(sql: string): Promise<Record<string, unknown>[]> {
   const pool = getPool();
   try {
-    const { rows } = await pool.query(sql);
+    const { rows } = await queryWithRetry(pool, sql);
     return rows.slice(0, MAX_ROWS);
   } catch (err) {
     const e = err as { message?: string; code?: string };

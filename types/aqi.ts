@@ -88,9 +88,15 @@ export interface DayTypePoint {
 export interface AskResponse {
   sql: string;
   rows: Record<string, unknown>[];
+  rowCount?: number;
   summary: string;
   degraded?: boolean;
   repaired?: boolean;
+}
+
+export interface AskErrorResponse {
+  code: string;
+  error: string;
 }
 
 export interface ChatMessage {
