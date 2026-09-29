@@ -1,14 +1,3 @@
-/**
- * Date formatting helpers.
- *
- * Every format is pinned to UTC and every call is meant to happen on the
- * SERVER. A client component that calls `toLocaleString` during render gets
- * two different answers — one per timezone and one per ICU build — and React
- * reports the difference as a hydration mismatch (minified errors 425, 418
- * and 423). Server-side formatting sidesteps the problem entirely: the client
- * only ever receives a finished string.
- */
-
 const UTC = "UTC";
 
 const dateTimeFormat = new Intl.DateTimeFormat("fr-FR", {

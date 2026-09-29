@@ -14,7 +14,6 @@ export const maxDuration = 30;
 const FALLBACK_SUMMARY =
   "Le résumé automatique n'a pas pu être généré, voici donc les résultats bruts de la requête.";
 
-/** The summariser only ever reads the first 30 rows; the rest is display only. */
 const CLIENT_ROW_LIMIT = 200;
 
 export async function POST(req: NextRequest) {
@@ -55,8 +54,6 @@ export async function POST(req: NextRequest) {
   const history = body.history ?? [];
   const encoder = new TextEncoder();
 
-  // Everything past this point is a stream: the HTTP status is already 200,
-  // so failures travel as an `error` event instead.
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
@@ -65,7 +62,6 @@ export async function POST(req: NextRequest) {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         } catch {
-          // The browser hung up (Stop button, navigation, lost connection).
           closed = true;
         }
       };
@@ -75,14 +71,13 @@ export async function POST(req: NextRequest) {
         try {
           controller.close();
         } catch {
-          // Already closed or errored.
         }
       };
 
       try {
         send({ type: "status", label: "Traduction de la question en SQL…" });
 
-        const { sql, rows, attempts } = await askWarehouse(question, history, 2, (validated) =>
+        const { rows, attempts } = await askWarehouse(question, history, 2, (validated) =>
           send({ type: "sql", sql: validated })
         );
 

@@ -70,7 +70,6 @@ LIMIT 24;
 const PRIMARY_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const FALLBACK_MODEL = "openai/gpt-oss-20b";
 
-/** Model ids this deployment will try, in order. Safe to expose: not a secret. */
 export function getModelIds(): string[] {
   return [PRIMARY_MODEL, FALLBACK_MODEL];
 }
@@ -113,11 +112,6 @@ function requestOptions() {
   return { signal: AbortSignal.timeout(GROQ_TIMEOUT_MS), maxRetries: 1 };
 }
 
-/**
- * Runs `fn` against the configured model and, if that model reports itself
- * unavailable, once more against a smaller fallback. Any other failure is
- * rethrown immediately so we never burn a second call on a 401 or a 429.
- */
 async function withModelFallback<T>(fn: (model: string) => Promise<T>): Promise<T> {
   const models = [PRIMARY_MODEL, FALLBACK_MODEL];
   let lastError: unknown;
@@ -142,10 +136,6 @@ export interface AskError {
   error: string;
 }
 
-/**
- * Maps any thrown value onto a status + stable machine code + French message.
- * Never leaks the DSN, the API key or a stack trace to the client.
- */
 export function toAskError(err: unknown): AskError {
   if (err instanceof SqlValidationError) {
     return {
@@ -257,9 +247,6 @@ export function validateSelectOnly(rawSql: string): string {
     }
   }
 
-  // Clamp every LIMIT, then make sure the OUTERMOST query has one: a LIMIT
-  // nested in a subquery used to satisfy the old check and let the outer
-  // query return an unbounded number of rows.
   sql = sql.replace(/\blimit\s+(\d+)/gi, (_m, n) => `LIMIT ${Math.min(MAX_ROWS, Number(n))}`);
   if (!/\blimit\s+\d+\s*$/i.test(sql)) {
     sql = `${sql} LIMIT ${MAX_ROWS}`;
@@ -270,7 +257,6 @@ export function validateSelectOnly(rawSql: string): string {
 
 type Turn = { role: "user" | "assistant"; content: string };
 
-/** The chat API rejects a conversation that does not start with a user turn. */
 function normaliseHistory(history: { role: string; content: string }[]): Turn[] {
   const turns = history
     .filter((h) => h.role === "user" || h.role === "assistant")
@@ -325,7 +311,6 @@ export async function summarizeResult(
   return completion.choices[0]?.message?.content ?? "";
 }
 
-/** Same job as summarizeResult, but the answer is delivered token by token. */
 export async function streamSummary(
   question: string,
   rows: Record<string, unknown>[],
@@ -349,15 +334,14 @@ export interface AskResult {
   attempts: number;
 }
 
-/** Postgres errors worth a second attempt: the model picked a name that is not there. */
 const REPAIRABLE_SQL_CODES = new Set([
-  "42703", // undefined_column
-  "42P01", // undefined_table
-  "42601", // syntax_error
-  "42883", // undefined_function
-  "42804", // datatype_mismatch
-  "22P02", // invalid_text_representation
-  "22007", // invalid_datetime_format
+  "42703",
+  "42P01",
+  "42601",
+  "42883",
+  "42804",
+  "22P02",
+  "22007",
 ]);
 
 export function isRepairableSqlError(err: unknown): boolean {
@@ -380,12 +364,6 @@ const REPAIR_PROMPT = (sql: string, message: string) =>
      Note the pollutant columns are named pm25, pm10, no2 and o3 — not pm2_5 or pm_2_5.`,
   ].join("\n");
 
-/**
- * generate -> validate -> run, with one repair round: when PostgreSQL rejects
- * the generated SQL, the error is fed back to the model and the query is
- * regenerated. A hallucinated column name is the single most common failure
- * and it is entirely recoverable.
- */
 export async function askWarehouse(
   question: string,
   history: { role: string; content: string }[] = [],
@@ -427,16 +405,6 @@ export async function runValidatedQuery(sql: string): Promise<Record<string, unk
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 8;
-/**
- * Best-effort limiter, NOT a security boundary.
- *
- * On Vercel each serverless instance gets its own memory, so this Map only
- * ever sees the requests that landed on one warm instance — the effective
- * global limit is the provider's, not this one. It exists to stop a single
- * user hammering a warm function during a demo. The limits that actually hold
- * are the read-only Postgres role, the SQL validation, and the Groq quota
- * (429s are propagated with a Retry-After, and the SDK retries once).
- */
 const buckets = new Map<string, number[]>();
 
 export function checkRateLimit(key: string): { ok: boolean; retryAfterMs: number } {

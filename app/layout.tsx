@@ -23,7 +23,6 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const lastRefresh = await getLastRefresh().catch(() => null);
-  // Formatted here, on the server: Topbar must not build a Date during render.
   const lastRefreshLabel = formatUtcDateTime(lastRefresh);
 
   return (

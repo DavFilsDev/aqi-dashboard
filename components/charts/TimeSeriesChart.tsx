@@ -13,8 +13,6 @@ export default function TimeSeriesChart({
   subtitle?: string;
 }) {
   if (data.length === 0) return <EmptyState />;
-  // `label` is computed on the server so the date is never formatted during
-  // hydration. `bucket` stays as the untouched raw value.
   const chartData = data.map((d) => ({
     date: d.label ?? d.bucket,
     "AQI moyen": Number(d.avg_aqi?.toFixed?.(2) ?? d.avg_aqi),

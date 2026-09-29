@@ -85,6 +85,30 @@ const FROM_JOIN = `
   JOIN dim_time ON dim_time.time_id = fact_aqi.time_id
 `;
 
+interface DayTypeRow {
+  is_weekend: boolean;
+  avg_aqi: number | null;
+}
+
+interface ScatterRow {
+  pm25: number | null;
+  aqi: number | null;
+}
+
+interface MapRow {
+  city: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  avg_aqi: number | null;
+  n: string;
+}
+
+interface ExplorerRow extends Omit<FactRow, "timestamp_utc" | "date"> {
+  timestamp_utc: Date | string;
+  date: Date | string;
+}
+
 export async function getAllCities(): Promise<City[]> {
   const pool = getPool();
   const { rows } = await queryWithRetry<City>(pool, 
@@ -185,14 +209,14 @@ export async function getHourlyAverages(filters: Filters): Promise<HourPoint[]> 
 export async function getWeekdayVsWeekend(filters: Filters): Promise<DayTypePoint[]> {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
-  const { rows } = await queryWithRetry(pool, 
+  const { rows } = await queryWithRetry<DayTypeRow>(pool, 
     `SELECT dim_time.is_weekend as is_weekend, AVG(fact_aqi.aqi) as avg_aqi
      ${FROM_JOIN}
      ${sql}
      GROUP BY dim_time.is_weekend`,
     params
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     day_type: r.is_weekend ? "Weekend" : "Weekday",
     avg_aqi: Number(r.avg_aqi),
   }));
@@ -276,7 +300,7 @@ export async function getScatterData(filters: Filters, limit = 2000) {
   const pool = getPool();
   const { sql, params } = buildWhere(filters, 1);
   const idx = params.length + 1;
-  const { rows } = await queryWithRetry(pool, 
+  const { rows } = await queryWithRetry<ScatterRow>(pool, 
     `SELECT fact_aqi.pm25 as pm25, fact_aqi.aqi as aqi
      ${FROM_JOIN}
      ${sql ? sql + " AND" : "WHERE"} fact_aqi.pm25 IS NOT NULL AND fact_aqi.aqi IS NOT NULL
@@ -284,13 +308,13 @@ export async function getScatterData(filters: Filters, limit = 2000) {
      LIMIT $${idx}`,
     [...params, limit]
   );
-  return rows.map((r: any) => ({ pm25: Number(r.pm25), aqi: Number(r.aqi) }));
+  return rows.map((r) => ({ pm25: Number(r.pm25), aqi: Number(r.aqi) }));
 }
 
 export async function getMapStats(filters: Filters) {
   const pool = getPool();
   const { sql, params } = buildWhere(filters);
-  const { rows } = await queryWithRetry(pool, 
+  const { rows } = await queryWithRetry<MapRow>(pool, 
     `SELECT dim_city.city, dim_city.country, dim_city.latitude, dim_city.longitude,
             AVG(fact_aqi.aqi) as avg_aqi, COUNT(*) as n
      ${FROM_JOIN}
@@ -298,7 +322,7 @@ export async function getMapStats(filters: Filters) {
      GROUP BY dim_city.city, dim_city.country, dim_city.latitude, dim_city.longitude`,
     params
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     city: r.city,
     country: r.country,
     latitude: Number(r.latitude),
@@ -336,7 +360,7 @@ export async function getExplorerRows(
   const limitIdx = params.length + 1;
   const offsetIdx = params.length + 2;
 
-  const { rows } = await queryWithRetry(pool, 
+  const { rows } = await queryWithRetry<ExplorerRow>(pool, 
     `SELECT fact_aqi.fact_id, dim_city.city, dim_city.country,
             dim_time.timestamp_utc, dim_time.date, dim_time.hour,
             dim_time.day_of_week, dim_time.is_weekend,
@@ -349,7 +373,7 @@ export async function getExplorerRows(
   );
 
   return {
-    rows: rows.map((r: any) => ({
+    rows: rows.map((r) => ({
       ...r,
       timestamp_utc: String(r.timestamp_utc),
       date: String(r.date),
@@ -364,7 +388,7 @@ export async function getExplorerRowsForExport(filters: Filters, cap = 20000): P
   const sortCol = SORTABLE_COLUMNS[filters.sortBy ?? "timestamp_utc"] ?? "dim_time.timestamp_utc";
   const sortDir = filters.sortDir === "asc" ? "ASC" : "DESC";
   const idx = params.length + 1;
-  const { rows } = await queryWithRetry(pool, 
+  const { rows } = await queryWithRetry<ExplorerRow>(pool, 
     `SELECT dim_city.city, dim_city.country,
             dim_time.timestamp_utc, dim_time.date, dim_time.hour,
             dim_time.day_of_week, dim_time.is_weekend,
@@ -375,7 +399,7 @@ export async function getExplorerRowsForExport(filters: Filters, cap = 20000): P
      LIMIT $${idx}`,
     [...params, cap]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     ...r,
     timestamp_utc: String(r.timestamp_utc),
     date: String(r.date),

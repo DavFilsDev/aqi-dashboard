@@ -6,13 +6,6 @@ function isMidnightUtc(d: Date): boolean {
   return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
 }
 
-/**
- * Turns one raw driver value into something JSON-safe and readable.
- *
- * node-postgres returns `numeric` and `bigint` as strings and `timestamp` /
- * `date` as Date objects, so an unnormalised result set reaches the browser
- * with ISO strings and quoted numbers.
- */
 export function normaliseRowValue(value: unknown): unknown {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) {

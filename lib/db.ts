@@ -27,8 +27,6 @@ function createPool(): Pool {
     max: 5,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
-    // An LLM-authored query can scan the whole fact table; cap it server-side
-    // rather than relying on a LIMIT the model may have forgotten.
     statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS ?? 8_000),
     query_timeout: Number(process.env.DB_QUERY_TIMEOUT_MS ?? 10_000),
     keepAlive: true,
@@ -63,17 +61,17 @@ function isTransient(err: unknown): boolean {
   return Boolean(nested?.some((e) => e.code && TRANSIENT_ERROR_CODES.has(e.code)));
 }
 
-export async function queryWithRetry<T extends QueryResultRow = any>(
+export async function queryWithRetry<T extends QueryResultRow = QueryResultRow>(
   pool: Pool,
   text: string,
   params?: unknown[]
 ): Promise<{ rows: T[] }> {
   try {
-    return await pool.query<T>(text, params as any[]);
+    return await pool.query<T>(text, params);
   } catch (err) {
     if (!isTransient(err)) throw err;
     console.warn("[db] transient error, retrying once:", (err as Error).message);
     await new Promise((r) => setTimeout(r, 500));
-    return await pool.query<T>(text, params as any[]);
+    return await pool.query<T>(text, params);
   }
 }

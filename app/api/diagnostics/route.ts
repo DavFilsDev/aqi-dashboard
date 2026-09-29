@@ -65,14 +65,6 @@ async function probeGroq() {
   }
 }
 
-/**
- * Health probe for the two external dependencies of Ask AI.
- *
- * Returns booleans, model ids and row counts — never the connection string,
- * never an API key. Disabled entirely when DIAGNOSTICS_TOKEN is unset.
- *
- *   curl "https://<host>/api/diagnostics?token=<DIAGNOSTICS_TOKEN>"
- */
 export async function GET(req: NextRequest) {
   const expected = process.env.DIAGNOSTICS_TOKEN;
   if (!expected) {

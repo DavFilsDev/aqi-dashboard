@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { City, DEFAULT_FILTERS } from "@/types/aqi";
+import { City, Filters } from "@/types/aqi";
 import { DATE_PRESETS, parseFilters, filtersToSearchParams } from "@/lib/filters";
 
 export interface FilterBarConfig {
@@ -266,9 +266,12 @@ export default function FilterBar({
                   type="number"
                   min={0}
                   value={filters[key] ?? ""}
-                  onChange={(e) =>
-                    push({ [key]: e.target.value === "" ? null : Number(e.target.value) } as any)
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? null : Number(e.target.value);
+                    // The computed key widens to a plain string; it is always
+                    // one of the four pollutant thresholds declared above.
+                    push({ [key]: value } as Partial<Filters>);
+                  }}
                   className="w-24 text-xs border border-ink-200 rounded-md px-2 py-1"
                   placeholder="—"
                 />

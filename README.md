@@ -68,6 +68,34 @@ naturel en une requête SQL `SELECT` validée puis exécutée en lecture seule.
    npm run start
    ```
 
+## Qualité du code
+
+```bash
+npm run lint     # ESLint : next/core-web-vitals + règles TypeScript
+npx tsc --noEmit # vérification de types seule
+```
+
+`.eslintrc.js` étend `next/core-web-vitals` (règles React qui ont un impact
+réel : images, hooks, keys) et ajoute `plugin:@typescript-eslint/recommended`
+**uniquement sur les fichiers `.ts` / `.tsx`** — `next/core-web-vitals` ne
+fournit que le parser, pas les règles.
+
+Deux choix méritent une explication, parce qu'ils désactivent volontairement
+une règle :
+
+- `react/no-unescaped-entities` est **désactivée**. L'interface est en
+  français : « l'entrepôt », « d'où », « n'a » sont la forme correcte, et les
+  écrire `&apos;` rendrait la source illisible. La règle protège contre une
+  injection de HTML, pas contre l'apostrophe.
+- `@typescript-eslint/no-explicit-any` est en **avertissement** et non en
+  erreur : elle signale un point où le typage a été abandonné sans bloquer le
+  build. Le projet est en TypeScript `strict`, donc `any` est un indicateur
+  utile — mais un avertissement qui casse `npm run build` sur une base de code
+  existante n'est pas un garde-fou, c'est un mur.
+
+`next build` exécute le lint avant de compiler : un avertissement n'arrête pas
+le build, une erreur si.
+
 ## Déploiement sur Vercel
 
 1. Pousser le dépôt sur GitHub.
@@ -197,5 +225,6 @@ données, la logique de filtres et l'intégration Groq.
 | `lib/ai.ts` | client Groq, génération et validation du SQL, réparation, erreurs |
 | `lib/format.ts` | formatage de dates UTC, appelé **côté serveur uniquement** |
 | `lib/rows.ts` | normalisation des lignes Postgres et export CSV |
+| `.eslintrc.js` | règles ESLint et justification des deux exceptions |
 | `app/api/ask/route.ts` | Ask AI : flux NDJSON |
 | `app/api/diagnostics/route.ts` | sonde Neon + Groq, protégée par `DIAGNOSTICS_TOKEN` |
