@@ -268,8 +268,6 @@ export default function FilterBar({
                   value={filters[key] ?? ""}
                   onChange={(e) => {
                     const value = e.target.value === "" ? null : Number(e.target.value);
-                    // The computed key widens to a plain string; it is always
-                    // one of the four pollutant thresholds declared above.
                     push({ [key]: value } as Partial<Filters>);
                   }}
                   className="w-24 text-xs border border-ink-200 rounded-md px-2 py-1"

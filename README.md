@@ -75,26 +75,17 @@ npm run lint     # ESLint : next/core-web-vitals + règles TypeScript
 npx tsc --noEmit # vérification de types seule
 ```
 
-`.eslintrc.js` étend `next/core-web-vitals` (règles React qui ont un impact
-réel : images, hooks, keys) et ajoute `plugin:@typescript-eslint/recommended`
-**uniquement sur les fichiers `.ts` / `.tsx`** — `next/core-web-vitals` ne
-fournit que le parser, pas les règles.
+`.eslintrc.js` étend `next/core-web-vitals` et ajoute
+`plugin:@typescript-eslint/recommended` sur les fichiers `.ts` / `.tsx`, le
+preset Next ne fournissant que le parser. Deux règles sont ajustées :
 
-Deux choix méritent une explication, parce qu'ils désactivent volontairement
-une règle :
+- `react/no-unescaped-entities` désactivée : l'interface est en français, et la
+  règle protège contre l'injection de HTML, pas contre l'apostrophe.
+- `no-explicit-any` en avertissement : `strict` est actif, un `any` est donc un
+  signal utile, mais pas une raison de casser le build.
 
-- `react/no-unescaped-entities` est **désactivée**. L'interface est en
-  français : « l'entrepôt », « d'où », « n'a » sont la forme correcte, et les
-  écrire `&apos;` rendrait la source illisible. La règle protège contre une
-  injection de HTML, pas contre l'apostrophe.
-- `@typescript-eslint/no-explicit-any` est en **avertissement** et non en
-  erreur : elle signale un point où le typage a été abandonné sans bloquer le
-  build. Le projet est en TypeScript `strict`, donc `any` est un indicateur
-  utile — mais un avertissement qui casse `npm run build` sur une base de code
-  existante n'est pas un garde-fou, c'est un mur.
-
-`next build` exécute le lint avant de compiler : un avertissement n'arrête pas
-le build, une erreur si.
+`next build` lance le lint avant de compiler : un avertissement ne bloque pas,
+une erreur si.
 
 ## Déploiement sur Vercel
 

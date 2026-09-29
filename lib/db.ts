@@ -11,9 +11,7 @@ export class DatabaseError extends Error {
 }
 
 declare global {
-  // TypeScript impose `var` dans `declare global` : c'est la seule façon de
-  // déclarer une variable globale, `let`/`const` y sont des erreurs de
-  // compilation. La règle `no-var` doit donc être désactivée sur cette ligne.
+  // TypeScript impose `var` dans `declare global` : `no-var` est désactivée ici.
   // eslint-disable-next-line no-var
   var __aqiPool: Pool | undefined;
 }

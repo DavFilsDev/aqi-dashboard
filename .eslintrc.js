@@ -1,10 +1,7 @@
 /**
  * ESLint — Next.js 14 + TypeScript strict.
- *
- * `next/core-web-vitals` couvre les règles React qui ont un impact réel sur les
- * performances (images, hooks, keys) et s'applique à tout le projet.
- * `plugin:@typescript-eslint/recommended` n'est activé que sur les fichiers TS :
- * `next/core-web-vitals` ne fournit que le parser, pas les règles.
+ * `next/core-web-vitals` apporte le parser et les règles React ; les règles
+ * TypeScript sont ajoutées à part car le preset Next ne fournit que le parser.
  */
 module.exports = {
   extends: "next/core-web-vitals",
@@ -13,13 +10,11 @@ module.exports = {
       files: ["**/*.ts", "**/*.tsx"],
       extends: ["plugin:@typescript-eslint/recommended"],
       rules: {
-        // Le projet cible TypeScript strict : un `any` explicite signale un
-        // point où le typage a été abandonné. On le signale sans bloquer le
-        // build, le temps de supprimer les `any` restants.
+        // `strict` est actif : un `any` signale un typage abandonné. Signale
+        // sans bloquer le build, le temps de supprimer les derniers.
         "@typescript-eslint/no-explicit-any": "warn",
-        // Le texte est en français : « l'entrepôt », « d'où », « n'a » sont la
-        // forme correcte. Écrire `&apos;` rendrait la source illisible sans
-        // aucun gain. La règle vise l'injection de HTML, pas l'apostrophe.
+        // UI en français : « l'entrepôt », « d'où » sont la forme correcte.
+        // La règle vise l'injection de HTML, pas l'apostrophe.
         "react/no-unescaped-entities": "off",
       },
     },
