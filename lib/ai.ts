@@ -42,9 +42,56 @@ Rules:
 - Return ONLY the raw SQL, no markdown fences, no commentary.
 `;
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const PRIMARY_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
+const FALLBACK_MODEL = "openai/gpt-oss-20b";
 
 export class SqlValidationError extends Error {}
+export class ConfigurationError extends Error {}
+
+let client: Groq | null = null;
+
+export function getGroq(): Groq {
+  if (!client) {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      throw new ConfigurationError(
+        "GROQ_API_KEY is not set. Add it to .env.local (see .env.example)."
+      );
+    }
+    client = new Groq({ apiKey });
+  }
+  return client;
+}
+
+function isModelUnavailable(err: unknown): boolean {
+  const e = err as { status?: number; code?: string; message?: string } | null;
+  if (!e) return false;
+  if (e.status === 404) return true;
+  if (e.code === "model_not_found") return true;
+  return /does not exist|do not have access to it/i.test(e.message ?? "");
+}
+
+type CompletionParams = {
+  messages: { role: "system" | "user" | "assistant"; content: string }[];
+  temperature?: number;
+  max_tokens?: number;
+};
+
+async function createCompletion(params: CompletionParams) {
+  const models = [PRIMARY_MODEL, FALLBACK_MODEL];
+  for (let i = 0; i < models.length; i++) {
+    try {
+      return await getGroq().chat.completions.create({ ...params, model: models[i] });
+    } catch (err) {
+      if (i < models.length - 1 && isModelUnavailable(err)) {
+        console.warn(`[ai] model "${models[i]}" unavailable, retrying with "${models[i + 1]}"`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new ConfigurationError("No usable completion model is configured.");
+}
 
 export function validateSelectOnly(rawSql: string): string {
   let sql = rawSql.trim();
@@ -75,8 +122,7 @@ export function validateSelectOnly(rawSql: string): string {
 }
 
 export async function generateSql(question: string, history: { role: string; content: string }[]): Promise<string> {
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+  const completion = await createCompletion({
     temperature: 0.1,
     max_tokens: 500,
     messages: [
@@ -93,8 +139,7 @@ export async function summarizeResult(
   rows: Record<string, unknown>[]
 ): Promise<string> {
   const sample = JSON.stringify(rows.slice(0, 30));
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+  const completion = await createCompletion({
     temperature: 0.2,
     max_tokens: 300,
     messages: [
